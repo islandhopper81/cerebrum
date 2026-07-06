@@ -53,8 +53,13 @@ Cerebrum uses an **LLM as the mutation operator**, which:
 
 ## Status
 
-Early scaffolding. First milestone: prove the config-driven baseline loop on a
-single module, then generalize across languages with zero engine changes.
+Early, but the core loop runs. The config adapter, baseline stage, and the
+**single-mutant lifecycle** (`cerebrum mutate`) are implemented: it selects a
+covered line, asks Claude to insert one bug, applies it in an isolated git
+worktree, runs the suite, classifies the outcome, and appends a record to
+`.cerebrum/mutants.jsonl`. Generating a real mutant needs `ANTHROPIC_API_KEY`.
+Still to come: parallel worktree pool (#4), smart targeting and run modes (#5),
+and reporting (#6).
 
 ## Mutant outcomes
 

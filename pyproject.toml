@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
+    "anthropic>=0.40",
     "pydantic>=2",
     "pyyaml>=6",
 ]
@@ -45,3 +46,9 @@ python_version = "3.11"
 strict = true
 mypy_path = "src"
 packages = ["cerebrum"]
+
+# The anthropic SDK is imported lazily and only by the real LLM operator; the
+# rest of the engine and the whole test suite run without it installed.
+[[tool.mypy.overrides]]
+module = ["anthropic.*"]
+ignore_missing_imports = true

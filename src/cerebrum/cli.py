@@ -10,6 +10,13 @@ from pathlib import Path
 from cerebrum.baseline.models import BaselineResult
 from cerebrum.baseline.runner import BaselineError, run_baseline
 from cerebrum.config.loader import DEFAULT_CONFIG_NAME, ConfigError, load_config
+from cerebrum.config.model import CerebrumConfig, Module
+from cerebrum.exec.git import GitError
+from cerebrum.execute.lifecycle import NoMutantProduced, run_mutant
+from cerebrum.execute.select import select_target
+from cerebrum.execute.store import append_record
+from cerebrum.execute.worktree import WorktreeError
+from cerebrum.generate.llm import LLMOperator, LLMOperatorError
 
 
 def _cmd_validate(args: argparse.Namespace) -> int:
@@ -68,6 +75,78 @@ def _cmd_baseline(args: argparse.Namespace) -> int:
     return exit_code
 
 
+def _cmd_mutate(args: argparse.Namespace) -> int:
+    config_path = Path(args.config)
+    try:
+        config = load_config(config_path)
+    except ConfigError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    if (args.file is None) != (args.line is None):
+        print("--file and --line must be given together", file=sys.stderr)
+        return 1
+
+    module = _select_module(config, args.module, config_path)
+    if module is None:
+        return 1
+
+    repo_root = config_path.resolve().parent
+    try:
+        baseline = run_baseline(module, repo_root, config.baseline, config.runtime)
+    except BaselineError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    target = select_target(
+        baseline, module, repo_root, file=args.file, line=args.line
+    )
+    if target is None:
+        print(f"module '{module.name}': no covered lines to mutate")
+        return 0
+
+    operator = LLMOperator(
+        model=config.mutation.model, budget_usd=config.mutation.budget_usd
+    )
+    print(f"Mutate: {config_path} (project: {config.project}, module: {module.name})")
+    try:
+        record = run_mutant(
+            module, repo_root, baseline, config.runtime, operator, target
+        )
+    except NoMutantProduced as exc:
+        print(f"  {exc}")
+        return 0
+    except (WorktreeError, GitError, LLMOperatorError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    out = append_record(repo_root, record)
+    print(
+        f"  {record.file}:{record.line} → {record.status} "
+        f"({record.mutation_type or 'n/a'}, {record.duration_seconds:.2f}s)  "
+        f"→ recorded in {out}"
+    )
+    return 0
+
+
+def _select_module(
+    config: CerebrumConfig, name: str | None, config_path: Path
+) -> Module | None:
+    if name is not None:
+        for module in config.modules:
+            if module.name == name:
+                return module
+        print(f"no module named '{name}' in {config_path}", file=sys.stderr)
+        return None
+    if len(config.modules) > 1:
+        print(
+            "config defines multiple modules; specify one with --module",
+            file=sys.stderr,
+        )
+        return None
+    return config.modules[0]
+
+
 def _count_uncovered(result: BaselineResult) -> int:
     return sum(
         len(instrumented - result.covered_lines.get(file, set()))
@@ -104,6 +183,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="only run this module by name (default: all modules)",
     )
     baseline.set_defaults(func=_cmd_baseline)
+
+    mutate = sub.add_parser(
+        "mutate",
+        help="Run one mutant end-to-end: select → generate → apply → test → classify",
+    )
+    mutate.add_argument(
+        "-c",
+        "--config",
+        default=DEFAULT_CONFIG_NAME,
+        help=f"path to config file (default: ./{DEFAULT_CONFIG_NAME})",
+    )
+    mutate.add_argument(
+        "--module",
+        default=None,
+        help="module to mutate (required when the config defines more than one)",
+    )
+    mutate.add_argument(
+        "--file",
+        default=None,
+        help="target file to mutate (repo-relative; requires --line)",
+    )
+    mutate.add_argument(
+        "--line",
+        type=int,
+        default=None,
+        help="target line to mutate (1-based; requires --file)",
+    )
+    mutate.set_defaults(func=_cmd_mutate)
     return parser
 
 
