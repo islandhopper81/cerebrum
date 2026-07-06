@@ -59,7 +59,9 @@ adapter file, not here.)*
 ```
 src/cerebrum/          # the engine (Python)
   config/              # cerebrum.yaml model + loader (issue #1)
-  cli.py               # `cerebrum` entry point
+  exec/                # shared shell command runner (issue #2)
+  baseline/            # baseline stage: install/test/require-green/coverage (issue #2)
+  cli.py               # `cerebrum` entry point (`validate`, `baseline`)
 examples/              # sample cerebrum.yaml files (e.g. FeedTheFamily)
 tests/                 # pytest suite, mirrors src/cerebrum/
 ```
