@@ -62,9 +62,10 @@ covered line, asks Claude to insert one bug, applies it in an isolated git
 worktree, runs the suite, classifies the outcome, and appends a record to
 `.cerebrum/mutants.jsonl`. Generating a real mutant needs `ANTHROPIC_API_KEY`.
 Targeting and sweeps (`cerebrum run`, `--diff`) are implemented: pick covered
-lines via the config's strategy or a changed-lines diff range, then mutate each
-one sequentially. Still to come: parallel worktree pool (#4), `llm-risk` and
-`all` strategies, and reporting (#6).
+lines via the config's strategy or a changed-lines diff range, then mutate
+them in parallel across a pool of pre-installed, reused git worktrees
+(`runtime.parallelism`) instead of one at a time. Still to come: `llm-risk`
+and `all` strategies, and reporting (#6).
 
 ## Mutant outcomes
 
