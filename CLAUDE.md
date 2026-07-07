@@ -54,16 +54,21 @@ Example: issue #1 (`adapter` label) → `feat/1-config-adapter`.
 the codebases it mutates — those are described per-repo in a `cerebrum.yaml`
 adapter file, not here.)*
 
+Every target repo running Cerebrum should add `.cerebrum/` to its own
+`.gitignore` — that directory holds engine output (mutant records, run history,
+`history.sqlite`), not source, and nothing currently does this for you.
+
 ## Repo structure (emerging — see issue #1)
 
 ```
 src/cerebrum/          # the engine (Python)
   config/              # cerebrum.yaml model + loader (issue #1)
-  exec/                # shared shell command runner + git wrappers (issues #2, #3, #5, #4)
+  exec/                # shared shell command runner + git wrappers (issues #2, #3, #5, #4, #6)
   baseline/            # baseline stage: install/test/require-green/coverage (issue #2)
-  generate/            # GENERATE stage: operator seam + LLM operator (issue #3)
-  execute/             # EXECUTE stage: lifecycle, targeting, worktree pool + parallel runner (issues #3, #5, #4)
-  cli.py               # `cerebrum` entry point (`validate`, `baseline`, `mutate`, `run`)
+  generate/            # GENERATE stage: operator seam + LLM operator + severity (issues #3, #6)
+  execute/             # EXECUTE stage: lifecycle, targeting, worktree pool + parallel runner (issues #3, #5, #4, #6)
+  report/              # REPORT stage: score, survivor report, suggested tests, trend (issue #6)
+  cli.py               # `cerebrum` entry point (`validate`, `baseline`, `mutate`, `run`, `report`)
 examples/              # sample cerebrum.yaml files (e.g. FeedTheFamily)
 tests/                 # pytest suite, mirrors src/cerebrum/
 ```

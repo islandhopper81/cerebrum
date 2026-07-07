@@ -15,9 +15,10 @@ import json
 import os
 from typing import Any, cast, get_args
 
-from cerebrum.generate.operator import MutantProposal, MutationTarget, MutationType
+from cerebrum.generate.operator import MutantProposal, MutationTarget, MutationType, Severity
 
 _MUTATION_TYPES = frozenset(get_args(MutationType))
+_SEVERITIES = frozenset(get_args(Severity))
 
 # Rough per-token USD rates used only for the pre-call budget guard. Real
 # accounting lands in REPORTING (#6); at one mutant this never trips.
@@ -106,11 +107,13 @@ class LLMOperator:
             "```\n\n"
             "Respond with ONLY a JSON object, no prose, of the form:\n"
             '{"diff": "<unified diff>", "mutation_type": "<type>", '
-            '"rationale": "<one sentence>", "equivalent": false}\n\n'
+            '"rationale": "<one sentence>", "equivalent": false, "severity": "<severity>"}\n\n'
             f"where mutation_type is one of {sorted(_MUTATION_TYPES)}, the diff is a "
             f"unified diff addressing the file as a/{target.file} and b/{target.file} "
-            "(appliable with `git apply`), and equivalent is true only if you could "
-            "not produce a behaviour-changing bug."
+            "(appliable with `git apply`), equivalent is true only if you could "
+            f"not produce a behaviour-changing bug, and severity is one of "
+            f"{sorted(_SEVERITIES)}, reflecting how consequential this bug would be "
+            "if it shipped to production."
         )
 
     def _parse(self, text: str) -> MutantProposal | None:
@@ -131,11 +134,16 @@ class LLMOperator:
             cast(MutationType, raw_type) if raw_type in _MUTATION_TYPES else "other"
         )
         rationale = data.get("rationale")
+        raw_severity = data.get("severity")
+        severity: Severity = (
+            cast(Severity, raw_severity) if raw_severity in _SEVERITIES else "medium"
+        )
         return MutantProposal(
             diff=diff,
             mutation_type=mutation_type,
             rationale=rationale if isinstance(rationale, str) else "",
             equivalent=bool(data.get("equivalent", False)),
+            severity=severity,
         )
 
 

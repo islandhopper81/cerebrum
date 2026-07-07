@@ -22,6 +22,8 @@ MutationType = Literal[
     "other",
 ]
 
+Severity = Literal["low", "medium", "high", "critical"]
+
 
 @dataclass(frozen=True)
 class MutationTarget:
@@ -40,12 +42,15 @@ class MutantProposal:
     """One mutant. ``diff`` is a unified diff addressing ``file`` by its
     repo-root-relative path (``a/… b/…``), appliable with ``git apply`` at a
     worktree root. ``equivalent`` is the operator's own signal that the mutant
-    does not change behaviour and should be discarded."""
+    does not change behaviour and should be discarded. ``severity`` is the
+    operator's estimate of how consequential this bug would be if it shipped —
+    used by REPORTING (#6) to trend survivor impact across runs, not just count."""
 
     diff: str
     mutation_type: MutationType
     rationale: str
     equivalent: bool = False
+    severity: Severity = "medium"
 
 
 class MutationOperator(Protocol):

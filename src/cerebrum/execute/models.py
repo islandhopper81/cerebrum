@@ -24,3 +24,4 @@ class MutantRecord:
     covering_tests: str
     rationale: str
     duration_seconds: float
+    severity: str = ""

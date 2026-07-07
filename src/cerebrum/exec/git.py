@@ -115,3 +115,13 @@ def _resolve_diff_path(raw: str, repo_root: Path) -> Path:
         return repo_root  # deleted file; no hunks will be attributed to it
     prefix, _, rel = raw.partition("/")
     return (repo_root / rel).resolve()
+
+
+def current_commit(repo_root: Path) -> str | None:
+    """Return the current ``HEAD`` commit hash, or ``None`` (never raises) —
+    informational metadata for correlating a run's score to a code change, not
+    load-bearing for the mutation loop itself."""
+    result = _run_git(["rev-parse", "HEAD"], cwd=repo_root)
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
