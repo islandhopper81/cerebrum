@@ -48,8 +48,11 @@ Cerebrum uses an **LLM as the mutation operator**, which:
   patch applies, changes behavior, and builds/lints.
 - **Coverage-guided targeting** — never mutate uncovered lines (they survive
   trivially and add noise).
-- **Two run modes**: `--diff` (PR gate, changed lines) and `--full`
-  (scheduled sweep, coverage-guided, score trend over time).
+- **One targeting vocabulary**: `cerebrum run` sweeps a module using the
+  strategy named in config (`coverage` by default); `cerebrum run --diff
+  <base>..<head>` mutates only lines changed in that range (PR gate). The CLI
+  never invents its own strategy names — `--diff` only supplies the range a
+  committed config can't.
 
 ## Status
 
@@ -58,8 +61,10 @@ Early, but the core loop runs. The config adapter, baseline stage, and the
 covered line, asks Claude to insert one bug, applies it in an isolated git
 worktree, runs the suite, classifies the outcome, and appends a record to
 `.cerebrum/mutants.jsonl`. Generating a real mutant needs `ANTHROPIC_API_KEY`.
-Still to come: parallel worktree pool (#4), smart targeting and run modes (#5),
-and reporting (#6).
+Targeting and sweeps (`cerebrum run`, `--diff`) are implemented: pick covered
+lines via the config's strategy or a changed-lines diff range, then mutate each
+one sequentially. Still to come: parallel worktree pool (#4), `llm-risk` and
+`all` strategies, and reporting (#6).
 
 ## Mutant outcomes
 

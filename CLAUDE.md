@@ -59,11 +59,11 @@ adapter file, not here.)*
 ```
 src/cerebrum/          # the engine (Python)
   config/              # cerebrum.yaml model + loader (issue #1)
-  exec/                # shared shell command runner + git wrappers (issues #2, #3)
+  exec/                # shared shell command runner + git wrappers (issues #2, #3, #5)
   baseline/            # baseline stage: install/test/require-green/coverage (issue #2)
   generate/            # GENERATE stage: operator seam + LLM operator (issue #3)
-  execute/             # EXECUTE stage: single-mutant lifecycle — worktree/gate/classify (issue #3)
-  cli.py               # `cerebrum` entry point (`validate`, `baseline`, `mutate`)
+  execute/             # EXECUTE stage: lifecycle, targeting, sequential runner (issues #3, #5)
+  cli.py               # `cerebrum` entry point (`validate`, `baseline`, `mutate`, `run`)
 examples/              # sample cerebrum.yaml files (e.g. FeedTheFamily)
 tests/                 # pytest suite, mirrors src/cerebrum/
 ```

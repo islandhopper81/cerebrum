@@ -1,10 +1,10 @@
 """Pick one target line to mutate.
 
-Deliberately minimal for #3: an explicit ``file``/``line`` override, else the
-first covered line in sorted-path order. This exists only to feed the lifecycle a
-deterministic target so the mechanical loop can be proven trustworthy. The smart
-strategies (``coverage`` ranking, ``changed``, ``llm-risk``, ``all``) are #5 and
-supersede this selector.
+``select_target`` is deliberately minimal (#3): an explicit ``file``/``line``
+override, else the first covered line in sorted-path order — just enough to feed
+the lifecycle a deterministic target for `cerebrum mutate`. ``build_target`` and
+``build_targets`` are the shared file-reading helpers; :mod:`cerebrum.execute.targeting`
+(#5) uses ``build_targets`` for its multi-line strategies.
 """
 
 from __future__ import annotations
@@ -38,16 +38,16 @@ def select_target(
         abs_path = Path(file)
         if not abs_path.is_absolute():
             abs_path = repo_root / file
-        return _build_target(abs_path.resolve(), line, repo_root, module.language)
+        return build_target(abs_path.resolve(), line, repo_root, module.language)
 
     for path in sorted(baseline.covered_lines):
         lines = baseline.covered_lines[path]
         if lines:
-            return _build_target(path, min(lines), repo_root, module.language)
+            return build_target(path, min(lines), repo_root, module.language)
     return None
 
 
-def _build_target(
+def build_target(
     abs_path: Path, line: int, repo_root: Path, language: str
 ) -> MutationTarget:
     rel = abs_path.relative_to(repo_root)
@@ -55,3 +55,16 @@ def _build_target(
     return MutationTarget(
         file=rel, line=line, source_text=source_text, language=language
     )
+
+
+def build_targets(
+    abs_path: Path, lines: set[int], repo_root: Path, language: str
+) -> list[MutationTarget]:
+    """Build one :class:`MutationTarget` per line in ``lines`` (sorted), reading
+    ``abs_path`` only once."""
+    rel = abs_path.relative_to(repo_root)
+    source_text = abs_path.read_text(encoding="utf-8") if abs_path.exists() else ""
+    return [
+        MutationTarget(file=rel, line=line, source_text=source_text, language=language)
+        for line in sorted(lines)
+    ]

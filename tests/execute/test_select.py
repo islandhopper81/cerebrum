@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from cerebrum.execute.select import select_target
+from cerebrum.execute.select import build_targets, select_target
 from tests.support import make_baseline, make_module
 
 
@@ -60,3 +60,13 @@ def test_file_without_line_is_an_error(tmp_path: Path) -> None:
     baseline = make_baseline({})
     with pytest.raises(ValueError):
         select_target(baseline, make_module(), tmp_path, file="pkg/mod.py")
+
+
+def test_build_targets_yields_one_target_per_sorted_line(tmp_path: Path) -> None:
+    src = _write(tmp_path, "pkg/mod.py", "a\nb\nc\nd\ne\n")
+
+    targets = build_targets(src, {4, 2}, tmp_path, "python")
+
+    assert [t.line for t in targets] == [2, 4]
+    assert all(t.file == Path("pkg/mod.py") for t in targets)
+    assert all(t.source_text == "a\nb\nc\nd\ne\n" for t in targets)
