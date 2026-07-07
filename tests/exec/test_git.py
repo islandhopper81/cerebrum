@@ -112,3 +112,21 @@ def test_changed_lines_bad_range_raises(tmp_path: Path) -> None:
     init_git_repo(tmp_path, {"a.py": "one\n"})
     with pytest.raises(git.GitError):
         git.changed_lines(tmp_path, "nonexistent-ref~1..nonexistent-ref")
+
+
+def test_discard_changes_restores_tracked_file(tmp_path: Path) -> None:
+    init_git_repo(tmp_path, {"a.txt": "one\n"})
+    (tmp_path / "a.txt").write_text("mutated\n", encoding="utf-8")
+
+    git.discard_changes(tmp_path)
+
+    assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "one\n"
+
+
+def test_discard_changes_removes_untracked_file(tmp_path: Path) -> None:
+    init_git_repo(tmp_path, {"a.txt": "one\n"})
+    (tmp_path / "new_file.txt").write_text("surprise\n", encoding="utf-8")
+
+    git.discard_changes(tmp_path)
+
+    assert not (tmp_path / "new_file.txt").exists()

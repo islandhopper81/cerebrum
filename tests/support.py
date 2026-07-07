@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import difflib
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -74,6 +75,27 @@ def init_git_repo(root: Path, files: dict[str, str]) -> None:
         path.write_text(content, encoding="utf-8")
     _git(root, "add", "-A")
     _git(root, "commit", "-m", "init")
+
+
+def make_install_counter(tmp_path: Path) -> tuple[str, Path]:
+    """Return ``(install_command, counter_path)``. Each run of the command
+    appends one byte to ``counter_path``, so ``count_installs`` below counts how
+    many times the module's ``install`` actually ran — used to prove a worktree
+    pool installs once per worktree, not once per mutant."""
+    counter_path = tmp_path / "install.count"
+    script_path = tmp_path / "_count_install.py"
+    script_path.write_text(
+        "import sys\nfrom pathlib import Path\nPath(sys.argv[1]).open('a').write('x')\n",
+        encoding="utf-8",
+    )
+    command = f'"{sys.executable}" "{script_path}" "{counter_path}"'
+    return command, counter_path
+
+
+def count_installs(counter_path: Path) -> int:
+    if not counter_path.exists():
+        return 0
+    return len(counter_path.read_text(encoding="utf-8"))
 
 
 def make_module(**overrides: Any) -> Module:

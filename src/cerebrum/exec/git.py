@@ -72,6 +72,18 @@ def apply(worktree_root: Path, diff: str) -> None:
         raise GitError(f"git apply failed: {result.stderr.strip()}")
 
 
+def discard_changes(worktree_root: Path) -> None:
+    """Restore ``worktree_root`` to its committed ``HEAD`` state so it can be
+    reused for another mutant: revert tracked-file edits, then remove any
+    untracked file a mutant patch introduced."""
+    checkout = _run_git(["checkout", "--", "."], cwd=worktree_root)
+    if checkout.returncode != 0:
+        raise GitError(f"git checkout failed: {checkout.stderr.strip()}")
+    clean = _run_git(["clean", "-fd"], cwd=worktree_root)
+    if clean.returncode != 0:
+        raise GitError(f"git clean failed: {clean.stderr.strip()}")
+
+
 def changed_lines(repo_root: Path, diff_range: str) -> dict[Path, set[int]]:
     """Return added/modified new-file line numbers per file for ``diff_range``
     (e.g. ``"main..HEAD"``). Keys are absolute resolved paths. A hunk that only
