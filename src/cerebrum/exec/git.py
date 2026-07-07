@@ -9,8 +9,11 @@ need no quoting.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
+
+_HUNK_HEADER = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 
 class GitError(Exception):
@@ -67,3 +70,36 @@ def apply(worktree_root: Path, diff: str) -> None:
     result = _run_git(["apply"], cwd=worktree_root, input_text=diff)
     if result.returncode != 0:
         raise GitError(f"git apply failed: {result.stderr.strip()}")
+
+
+def changed_lines(repo_root: Path, diff_range: str) -> dict[Path, set[int]]:
+    """Return added/modified new-file line numbers per file for ``diff_range``
+    (e.g. ``"main..HEAD"``). Keys are absolute resolved paths. A hunk that only
+    deletes lines contributes nothing for that file, since there is no new-file
+    line to mutate."""
+    result = _run_git(["diff", "--unified=0", diff_range], cwd=repo_root)
+    if result.returncode != 0:
+        raise GitError(f"git diff failed for range '{diff_range}': {result.stderr.strip()}")
+
+    changed: dict[Path, set[int]] = {}
+    current: Path | None = None
+    for line in result.stdout.splitlines():
+        if line.startswith("+++ "):
+            current = _resolve_diff_path(line[4:], repo_root)
+            continue
+        match = _HUNK_HEADER.match(line)
+        if match is None or current is None:
+            continue
+        start = int(match.group(1))
+        count = int(match.group(2)) if match.group(2) is not None else 1
+        if count == 0:
+            continue  # pure deletion hunk — no new-file lines added
+        changed.setdefault(current, set()).update(range(start, start + count))
+    return changed
+
+
+def _resolve_diff_path(raw: str, repo_root: Path) -> Path:
+    if raw == "/dev/null":
+        return repo_root  # deleted file; no hunks will be attributed to it
+    prefix, _, rel = raw.partition("/")
+    return (repo_root / rel).resolve()
