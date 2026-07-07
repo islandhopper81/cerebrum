@@ -55,13 +55,30 @@ Cerebrum uses an **LLM as the mutation operator**, which:
   never invents its own strategy names — `--diff` only supplies the range a
   committed config can't.
 
+## Setup
+
+Install the engine from the repo root: `pip install -e ".[dev]"`.
+
+Cerebrum needs `ANTHROPIC_API_KEY` set in the process environment for mutation
+generation and severity scoring — it only ever reads
+`os.environ["ANTHROPIC_API_KEY"]` and has no opinion on how that variable gets
+there. Use a plain `export`/`.env`, or inject it via whatever secrets manager
+you already use (1Password, Doppler, Vault, ...), e.g.:
+
+```
+op run --env-file=.env -- cerebrum run -c cerebrum.yaml --module backend
+```
+
+Don't bake a specific secrets tool into shared scripts or docs — each user or
+environment should be free to supply the key however they manage secrets.
+
 ## Status
 
 Early, but the core loop runs. The config adapter, baseline stage, and the
 **single-mutant lifecycle** (`cerebrum mutate`) are implemented: it selects a
 covered line, asks Claude to insert one bug, applies it in an isolated git
 worktree, runs the suite, classifies the outcome, and appends a record to
-`.cerebrum/mutants.jsonl`. Generating a real mutant needs `ANTHROPIC_API_KEY`.
+`.cerebrum/mutants.jsonl`. Generating a real mutant needs `ANTHROPIC_API_KEY` (see Setup).
 Targeting and sweeps (`cerebrum run`, `--diff`) are implemented: pick covered
 lines via the config's strategy or a changed-lines diff range, then mutate
 them in parallel across a pool of pre-installed, reused git worktrees
