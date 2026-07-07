@@ -94,6 +94,7 @@ def no_coverage_record(module: Module, target: MutationTarget) -> MutantRecord:
         covering_tests=module.test,
         rationale="",
         duration_seconds=0.0,
+        severity="",
     )
 
 
@@ -130,4 +131,5 @@ def _record(
         covering_tests=module.test,
         rationale=proposal.rationale,
         duration_seconds=duration_seconds,
+        severity=proposal.severity,
     )

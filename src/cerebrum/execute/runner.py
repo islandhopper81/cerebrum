@@ -38,6 +38,7 @@ def run_targets(
     runtime: Runtime,
     operator: MutationOperator,
     targets: list[MutationTarget],
+    run_id: str,
 ) -> list[MutantRecord]:
     if not targets:
         return []
@@ -64,6 +65,6 @@ def run_targets(
                 record = future.result()
                 if record is None:
                     continue
-                append_record(repo_root, record)
+                append_record(repo_root, record, run_id=run_id)
                 records.append(record)
     return records

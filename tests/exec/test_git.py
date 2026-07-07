@@ -123,6 +123,23 @@ def test_discard_changes_restores_tracked_file(tmp_path: Path) -> None:
     assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "one\n"
 
 
+def test_current_commit_returns_head_hash_in_a_repo(tmp_path: Path) -> None:
+    init_git_repo(tmp_path, {"a.txt": "one\n"})
+
+    commit = git.current_commit(tmp_path)
+
+    assert commit is not None
+    assert len(commit) == 40  # full sha
+    out = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert commit == out
+
+
+def test_current_commit_returns_none_outside_a_repo(tmp_path: Path) -> None:
+    assert git.current_commit(tmp_path) is None
+
+
 def test_discard_changes_removes_untracked_file(tmp_path: Path) -> None:
     init_git_repo(tmp_path, {"a.txt": "one\n"})
     (tmp_path / "new_file.txt").write_text("surprise\n", encoding="utf-8")

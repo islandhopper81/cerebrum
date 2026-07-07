@@ -96,11 +96,11 @@ def test_run_targets_produces_mixed_outcomes_and_records(tmp_path: Path) -> None
         build_target((repo / "app.py").resolve(), 2, repo, "python"),
     ]
 
-    records = run_targets(module, repo, baseline, Runtime(), operator, targets)
+    records = run_targets(module, repo, baseline, Runtime(), operator, targets, run_id="run-1")
 
     assert {r.line: r.status for r in records} == {1: "KILLED", 2: "SURVIVED"}
 
-    out = repo / ".cerebrum" / "mutants.jsonl"
+    out = repo / ".cerebrum" / "runs" / "run-1" / "mutants.jsonl"
     lines = out.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 2
     assert {json.loads(line)["line"] for line in lines} == {1, 2}
@@ -121,7 +121,7 @@ def test_run_targets_skips_no_mutant_produced_without_aborting(tmp_path: Path) -
         build_target((repo / "app.py").resolve(), 2, repo, "python"),
     ]
 
-    records = run_targets(module, repo, baseline, Runtime(), operator, targets)
+    records = run_targets(module, repo, baseline, Runtime(), operator, targets, run_id="run-1")
 
     assert [r.line for r in records] == [2]
     assert records[0].status == "KILLED"
@@ -145,7 +145,9 @@ def test_run_targets_reuses_worktree_when_pool_smaller_than_target_count(
         build_target((repo / "app.py").resolve(), 2, repo, "python"),
     ]
 
-    records = run_targets(module, repo, baseline, Runtime(parallelism=1), operator, targets)
+    records = run_targets(
+        module, repo, baseline, Runtime(parallelism=1), operator, targets, run_id="run-1"
+    )
 
     assert {r.line: r.status for r in records} == {1: "KILLED", 2: "SURVIVED"}
     assert count_installs(counter) == 1  # one worktree, reused for both targets
@@ -159,7 +161,13 @@ def test_run_targets_timeout_via_pooled_path(tmp_path: Path) -> None:
     targets = [build_target((repo / "app.py").resolve(), 1, repo, "python")]
 
     records = run_targets(
-        module, repo, baseline, Runtime(test_timeout_multiplier=1), operator, targets
+        module,
+        repo,
+        baseline,
+        Runtime(test_timeout_multiplier=1),
+        operator,
+        targets,
+        run_id="run-1",
     )
 
     assert records[0].status == "TIMEOUT"
@@ -175,7 +183,7 @@ def test_run_targets_propagates_pool_startup_failure_without_leaking_worktrees(
     targets = [build_target((repo / "app.py").resolve(), 1, repo, "python")]
 
     with pytest.raises(WorktreeError):
-        run_targets(module, repo, baseline, Runtime(), operator, targets)
+        run_targets(module, repo, baseline, Runtime(), operator, targets, run_id="run-1")
 
     assert _worktree_count(repo) == 1
 
@@ -211,7 +219,7 @@ def test_run_targets_survives_a_revert_failure_mid_run(
 
     monkeypatch.setattr("cerebrum.execute.pool.git.discard_changes", _fail_once)
 
-    records = run_targets(module, repo, baseline, Runtime(), operator, targets)
+    records = run_targets(module, repo, baseline, Runtime(), operator, targets, run_id="run-1")
 
     assert {r.line: r.status for r in records} == {1: "KILLED", 2: "SURVIVED"}
 
@@ -241,9 +249,11 @@ def test_run_targets_persists_completed_records_before_exhaustion_abort(
     # A single-worktree pool: after target 1's worktree fails to revert, the
     # pool is fully exhausted, so target 2's lease raises and aborts the run.
     with pytest.raises(WorktreeError):
-        run_targets(module, repo, baseline, Runtime(parallelism=1), operator, targets)
+        run_targets(
+            module, repo, baseline, Runtime(parallelism=1), operator, targets, run_id="run-1"
+        )
 
-    out = repo / ".cerebrum" / "mutants.jsonl"
+    out = repo / ".cerebrum" / "runs" / "run-1" / "mutants.jsonl"
     lines = out.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 1
     persisted = json.loads(lines[0])

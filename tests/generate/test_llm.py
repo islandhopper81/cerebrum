@@ -55,6 +55,7 @@ def test_parses_json_response_into_proposal() -> None:
             "mutation_type": "arithmetic",
             "rationale": "changed a constant",
             "equivalent": False,
+            "severity": "high",
         }
     )
     operator = _operator(_StubClient(f"Here you go:\n```json\n{payload}\n```"))
@@ -65,6 +66,33 @@ def test_parses_json_response_into_proposal() -> None:
     assert proposal.mutation_type == "arithmetic"
     assert proposal.rationale == "changed a constant"
     assert "+x = 2" in proposal.diff
+    assert proposal.severity == "high"
+
+
+def test_unknown_severity_falls_back_to_medium() -> None:
+    client = _StubClient(
+        json.dumps(
+            {
+                "diff": "--- a/app.py\n+++ b/app.py\n",
+                "mutation_type": "logic",
+                "severity": "catastrophic",
+            }
+        )
+    )
+    proposal = _operator(client).propose(_target())
+
+    assert proposal is not None
+    assert proposal.severity == "medium"
+
+
+def test_missing_severity_falls_back_to_medium() -> None:
+    client = _StubClient(
+        json.dumps({"diff": "--- a/app.py\n+++ b/app.py\n", "mutation_type": "logic"})
+    )
+    proposal = _operator(client).propose(_target())
+
+    assert proposal is not None
+    assert proposal.severity == "medium"
 
 
 def test_passes_configured_model_to_the_client() -> None:

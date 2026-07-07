@@ -37,6 +37,7 @@ Cerebrum uses an **LLM as the mutation operator**, which:
         │  3. GENERATE   LLM → ONE mutant patch + metadata      │
         │  4. EXECUTE    worktree: apply → build → test → class │
         │  5. REPORT     score · survivors · suggested tests    │
+        │                · severity-weighted trend across runs  │
         └───────────────────────────────────────────────────────┘
 ```
 
@@ -64,8 +65,10 @@ worktree, runs the suite, classifies the outcome, and appends a record to
 Targeting and sweeps (`cerebrum run`, `--diff`) are implemented: pick covered
 lines via the config's strategy or a changed-lines diff range, then mutate
 them in parallel across a pool of pre-installed, reused git worktrees
-(`runtime.parallelism`) instead of one at a time. Still to come: `llm-risk`
-and `all` strategies, and reporting (#6).
+(`runtime.parallelism`) instead of one at a time. Reporting (`cerebrum report`)
+is implemented: mutation score, a survivor report with LLM-suggested tests, and
+a severity-weighted trend across runs. Still to come: `llm-risk` and `all`
+strategies.
 
 ## Mutant outcomes
 
@@ -78,3 +81,19 @@ and `all` strategies, and reporting (#6).
 | `TIMEOUT`     | Tests hung (e.g. infinite loop); counts as killed. |
 | `BUILD_ERROR` | Mutant didn't compile/lint — invalid, discarded.   |
 | `NO_COVERAGE` | Line has no covering tests — excluded.             |
+
+## Trend tracking across runs
+
+Each `cerebrum run` is a "run" in the trend sense: its mutant records land under
+`.cerebrum/runs/<run_id>/mutants.jsonl`, and a summary row (score, kill/survive
+counts, the git commit at the time, and the average severity of that run's
+survivors) is appended to `.cerebrum/history.sqlite`. Every mutant now carries a
+Claude-estimated `severity` (`low`/`medium`/`high`/`critical`) alongside its
+`mutation_type`, so a declining score isn't the only signal — you can also see
+whether the *impact* of what's surviving is trending up or down over time, not
+just the count. `cerebrum report --trend` prints the last N runs; `cerebrum
+report --survivors` prints the current run's survivors (file:line, diff,
+severity, how many consecutive runs it's persisted) with an LLM-suggested test
+for each. `cerebrum mutate` (a one-off manual mutation) is not part of this —
+it still writes to the legacy flat `.cerebrum/mutants.jsonl` with no run or
+history entry. Target repos should add `.cerebrum/` to their own `.gitignore`.
