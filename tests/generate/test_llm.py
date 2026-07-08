@@ -104,6 +104,30 @@ def test_passes_configured_model_to_the_client() -> None:
     assert client.captured["model"] == "claude-sonnet-5"
 
 
+def test_prompt_uses_posix_path_separators_for_diff_headers() -> None:
+    """On Windows, str(Path(...)) renders backslashes; embedding that directly
+    in the a/ b/ diff headers produces a patch `git apply` can't parse, since
+    unified-diff paths are always forward-slash regardless of host OS. The
+    prompt must use target.file.as_posix() everywhere it names the file."""
+    client = _StubClient(
+        json.dumps({"diff": "--- a/x\n+++ b/x\n", "mutation_type": "logic"})
+    )
+    target = MutationTarget(
+        file=Path("backend") / "middleware" / "auth.js",
+        line=1,
+        source_text="x = 1\n",
+        language="javascript",
+    )
+
+    _operator(client).propose(target)
+
+    prompt = client.captured["messages"][0]["content"]
+    assert "\\" not in prompt
+    assert "a/backend/middleware/auth.js" in prompt
+    assert "b/backend/middleware/auth.js" in prompt
+    assert "File (repo-relative): backend/middleware/auth.js" in prompt
+
+
 def test_unknown_mutation_type_falls_back_to_other() -> None:
     client = _StubClient(
         json.dumps({"diff": "--- a/app.py\n+++ b/app.py\n", "mutation_type": "nonsense"})
