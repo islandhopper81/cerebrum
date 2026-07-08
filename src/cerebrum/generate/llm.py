@@ -99,7 +99,7 @@ class LLMOperator:
             "operator, a dropped edge case). Change as little as possible and do "
             "not reformat.\n\n"
             f"Language: {target.language}\n"
-            f"File (repo-relative): {target.file}\n"
+            f"File (repo-relative): {target.file.as_posix()}\n"
             f"Focus on line {target.line}.\n\n"
             "Source:\n"
             "```\n"
@@ -109,7 +109,8 @@ class LLMOperator:
             '{"diff": "<unified diff>", "mutation_type": "<type>", '
             '"rationale": "<one sentence>", "equivalent": false, "severity": "<severity>"}\n\n'
             f"where mutation_type is one of {sorted(_MUTATION_TYPES)}, the diff is a "
-            f"unified diff addressing the file as a/{target.file} and b/{target.file} "
+            f"unified diff addressing the file as a/{target.file.as_posix()} and "
+            f"b/{target.file.as_posix()} "
             "(appliable with `git apply`), equivalent is true only if you could "
             f"not produce a behaviour-changing bug, and severity is one of "
             f"{sorted(_SEVERITIES)}, reflecting how consequential this bug would be "
