@@ -33,10 +33,26 @@ def test_apply_check_false_for_conflicting_patch(tmp_path: Path) -> None:
     assert git.apply_check(tmp_path, diff) is False
 
 
+def test_apply_check_true_for_non_ascii_patch(tmp_path: Path) -> None:
+    old_text = 'const s = "café — “fancy”";\n'
+    new_text = 'const s = "café — “CHANGED”";\n'
+    init_git_repo(tmp_path, {"a.txt": old_text})
+    diff = make_patch("a.txt", old_text, new_text)
+    assert git.apply_check(tmp_path, diff) is True
+
+
 def test_apply_mutates_the_file(tmp_path: Path) -> None:
     init_git_repo(tmp_path, {"a.txt": "one\n"})
     git.apply(tmp_path, make_patch("a.txt", "one\n", "two\n"))
     assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "two\n"
+
+
+def test_apply_mutates_file_with_non_ascii_content(tmp_path: Path) -> None:
+    old_text = 'const s = "café — “fancy”";\n'
+    new_text = 'const s = "café — “CHANGED”";\n'
+    init_git_repo(tmp_path, {"a.txt": old_text})
+    git.apply(tmp_path, make_patch("a.txt", old_text, new_text))
+    assert (tmp_path / "a.txt").read_text(encoding="utf-8") == new_text
 
 
 def test_apply_raises_on_conflict(tmp_path: Path) -> None:
