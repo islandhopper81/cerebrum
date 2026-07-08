@@ -480,6 +480,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Windows consoles default to a legacy codepage (e.g. cp1252) that can't
+    # encode characters like the arrows printed by `run`/`report` output,
+    # crashing after mutation testing has already completed. Force utf-8
+    # regardless of the invoking environment's codepage/locale.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
     parser = build_parser()
     args = parser.parse_args(argv)
     result: int = args.func(args)
