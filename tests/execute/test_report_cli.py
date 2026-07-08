@@ -98,6 +98,9 @@ def _seed_run(
         no_coverage=0,
         mutation_score=(killed / total) if total else None,
         avg_survivor_severity=None,
+        covered_lines=None,
+        instrumented_lines=None,
+        coverage_pct=None,
         duration_seconds=1.0,
     )
     record_run(repo_root, summary, records)

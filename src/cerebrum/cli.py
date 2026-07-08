@@ -19,7 +19,12 @@ from cerebrum.exec.git import GitError, current_commit
 from cerebrum.execute.lifecycle import NoMutantProduced, run_mutant
 from cerebrum.execute.runner import run_targets
 from cerebrum.execute.select import select_target
-from cerebrum.execute.store import append_record, load_records
+from cerebrum.execute.store import (
+    append_record,
+    build_coverage_rows,
+    load_records,
+    write_coverage,
+)
 from cerebrum.execute.targeting import TargetingContext, TargetingError, select_targets
 from cerebrum.execute.worktree import WorktreeError
 from cerebrum.generate.llm import LLMOperator, LLMOperatorError
@@ -213,6 +218,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
     score = compute_score(records)
     previous = trend(repo_root, module.name, limit=1)
+    covered_total = sum(len(lines) for lines in baseline.covered_lines.values())
+    instrumented_total = sum(len(lines) for lines in baseline.instrumented_lines.values())
+    coverage_pct = covered_total / instrumented_total if instrumented_total else None
     run_summary = RunSummary(
         run_id=run_id,
         started_at=datetime.now(UTC).isoformat(),
@@ -226,9 +234,19 @@ def _cmd_run(args: argparse.Namespace) -> int:
         no_coverage=counts.get("NO_COVERAGE", 0),
         mutation_score=score,
         avg_survivor_severity=average_survivor_severity(records),
+        covered_lines=covered_total,
+        instrumented_lines=instrumented_total,
+        coverage_pct=coverage_pct,
         duration_seconds=duration,
     )
     record_run(repo_root, run_summary, records)
+    write_coverage(
+        repo_root,
+        run_id,
+        build_coverage_rows(
+            baseline.covered_lines, baseline.instrumented_lines, records, repo_root
+        ),
+    )
 
     if score is None:
         print("score: n/a (no valid mutants)")

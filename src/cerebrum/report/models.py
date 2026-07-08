@@ -19,4 +19,7 @@ class RunSummary:
     no_coverage: int
     mutation_score: float | None
     avg_survivor_severity: float | None
+    covered_lines: int | None
+    instrumented_lines: int | None
+    coverage_pct: float | None
     duration_seconds: float
