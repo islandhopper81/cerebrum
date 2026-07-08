@@ -62,15 +62,28 @@ Install the engine from the repo root: `pip install -e ".[dev]"`.
 Cerebrum needs `ANTHROPIC_API_KEY` set in the process environment for mutation
 generation and severity scoring — it only ever reads
 `os.environ["ANTHROPIC_API_KEY"]` and has no opinion on how that variable gets
-there. Use a plain `export`/`.env`, or inject it via whatever secrets manager
-you already use (1Password, Doppler, Vault, ...), e.g.:
+there.
+
+Avoid putting the raw key in a plaintext `.env` — copy `.env.example` to
+`.env` and put a *secrets-manager reference* in it instead, e.g. for
+1Password:
+
+```
+ANTHROPIC_API_KEY=op://<vault>/<item>/credential
+```
+
+Then run through that tool so it resolves the reference into the `cerebrum`
+child process only, never onto disk:
 
 ```
 op run --env-file=.env -- cerebrum run -c cerebrum.yaml --module backend
 ```
 
-Don't bake a specific secrets tool into shared scripts or docs — each user or
-environment should be free to supply the key however they manage secrets.
+The same pattern works with Doppler, Vault, or any other secrets manager —
+Cerebrum doesn't care which one, as long as the real value lands in the
+process environment before it runs. Don't bake a specific secrets tool into
+shared scripts or docs; each user or environment should be free to supply the
+key however they manage secrets.
 
 ## Status
 
