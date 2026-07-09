@@ -31,6 +31,9 @@ CREATE TABLE IF NOT EXISTS runs (
     no_coverage INTEGER NOT NULL,
     mutation_score REAL,
     avg_survivor_severity REAL,
+    covered_lines INTEGER,
+    instrumented_lines INTEGER,
+    coverage_pct REAL,
     duration_seconds REAL NOT NULL
 );
 
@@ -46,6 +49,16 @@ CREATE TABLE IF NOT EXISTS survivors (
 """
 
 
+# Columns added after the initial schema. CREATE TABLE IF NOT EXISTS will not
+# alter an existing DB, so add any missing ones explicitly (SQLite has no
+# ADD COLUMN IF NOT EXISTS).
+_RUNS_ADDED_COLUMNS = {
+    "covered_lines": "INTEGER",
+    "instrumented_lines": "INTEGER",
+    "coverage_pct": "REAL",
+}
+
+
 def init_db(repo_root: Path) -> Path:
     out_dir = repo_root / DB_DIRNAME
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -53,6 +66,10 @@ def init_db(repo_root: Path) -> Path:
     conn = sqlite3.connect(path)
     try:
         conn.executescript(_SCHEMA)
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}
+        for column, decl in _RUNS_ADDED_COLUMNS.items():
+            if column not in existing:
+                conn.execute(f"ALTER TABLE runs ADD COLUMN {column} {decl}")
         conn.commit()
     finally:
         conn.close()
@@ -69,8 +86,9 @@ def record_run(repo_root: Path, summary: RunSummary, records: list[MutantRecord]
         conn.execute(
             "INSERT INTO runs (run_id, started_at, module, strategy, commit_hash, "
             "killed, survived, timeout, build_error, no_coverage, mutation_score, "
-            "avg_survivor_severity, duration_seconds) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "avg_survivor_severity, covered_lines, instrumented_lines, coverage_pct, "
+            "duration_seconds) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 summary.run_id,
                 summary.started_at,
@@ -84,6 +102,9 @@ def record_run(repo_root: Path, summary: RunSummary, records: list[MutantRecord]
                 summary.no_coverage,
                 summary.mutation_score,
                 summary.avg_survivor_severity,
+                summary.covered_lines,
+                summary.instrumented_lines,
+                summary.coverage_pct,
                 summary.duration_seconds,
             ),
         )
@@ -107,6 +128,7 @@ def trend(repo_root: Path, module: str, limit: int = 20) -> list[RunSummary]:
         rows = conn.execute(
             "SELECT run_id, started_at, module, strategy, commit_hash, killed, survived, "
             "timeout, build_error, no_coverage, mutation_score, avg_survivor_severity, "
+            "covered_lines, instrumented_lines, coverage_pct, "
             "duration_seconds FROM runs WHERE module = ? ORDER BY started_at DESC LIMIT ?",
             (module, limit),
         ).fetchall()
@@ -126,7 +148,10 @@ def trend(repo_root: Path, module: str, limit: int = 20) -> list[RunSummary]:
             no_coverage=row[9],
             mutation_score=row[10],
             avg_survivor_severity=row[11],
-            duration_seconds=row[12],
+            covered_lines=row[12],
+            instrumented_lines=row[13],
+            coverage_pct=row[14],
+            duration_seconds=row[15],
         )
         for row in rows
     ]

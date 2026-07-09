@@ -6,12 +6,14 @@ import json
 from pathlib import Path
 
 from cerebrum.execute.models import MutantRecord
-from cerebrum.execute.store import append_record
+from cerebrum.execute.store import append_record, build_coverage_rows, write_coverage
 
 
-def _record(status: str = "KILLED", line: int = 3) -> MutantRecord:
+def _record(
+    status: str = "KILLED", line: int = 3, file: str = "pkg/mod.py", severity: str = "high"
+) -> MutantRecord:
     return MutantRecord(
-        file="pkg/mod.py",
+        file=file,
         line=line,
         diff="--- a/pkg/mod.py\n+++ b/pkg/mod.py\n",
         mutation_type="conditional",
@@ -19,7 +21,7 @@ def _record(status: str = "KILLED", line: int = 3) -> MutantRecord:
         covering_tests="pytest",
         rationale="flipped a comparison",
         duration_seconds=1.25,
-        severity="high",
+        severity=severity,
     )
 
 
@@ -71,3 +73,50 @@ def test_different_run_ids_write_to_separate_files(tmp_path: Path) -> None:
     assert out_a != out_b
     assert json.loads(out_a.read_text(encoding="utf-8").splitlines()[0])["line"] == 1
     assert json.loads(out_b.read_text(encoding="utf-8").splitlines()[0])["line"] == 2
+
+
+def test_build_coverage_rows_joins_coverage_and_survivors(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    covered = {
+        repo_root / "pkg" / "mod.py": {1, 2, 3, 4},
+        repo_root / "pkg" / "other.py": {1},
+    }
+    instrumented = {
+        repo_root / "pkg" / "mod.py": {1, 2, 3, 4, 5, 6, 7, 8},  # 4/8 = 0.5
+        repo_root / "pkg" / "other.py": {1, 2},  # 1/2 = 0.5
+    }
+    records = [
+        _record(status="SURVIVED", file="pkg/mod.py", severity="low"),
+        _record(status="SURVIVED", file="pkg/mod.py", severity="critical"),
+        _record(status="KILLED", file="pkg/mod.py"),
+        _record(status="SURVIVED", file="pkg/other.py", severity="medium"),
+    ]
+
+    rows = build_coverage_rows(covered, instrumented, records, repo_root)
+
+    assert [r["file"] for r in rows] == ["pkg/mod.py", "pkg/other.py"]  # sorted
+    mod = rows[0]
+    assert mod["covered_lines"] == 4
+    assert mod["instrumented_lines"] == 8
+    assert mod["coverage_pct"] == 0.5
+    assert mod["survivor_count"] == 2  # KILLED excluded
+    assert mod["max_severity"] == "critical"  # worst of low + critical
+    other = rows[1]
+    assert other["survivor_count"] == 1
+    assert other["max_severity"] == "medium"
+
+
+def test_build_coverage_rows_no_survivors_has_null_severity(tmp_path: Path) -> None:
+    instrumented = {tmp_path / "a.py": {1, 2}}
+    rows = build_coverage_rows({tmp_path / "a.py": {1}}, instrumented, [], tmp_path)
+    assert rows[0]["survivor_count"] == 0
+    assert rows[0]["max_severity"] is None
+    assert rows[0]["coverage_pct"] == 0.5
+
+
+def test_write_coverage_writes_json_under_run_dir(tmp_path: Path) -> None:
+    rows = [{"file": "a.py", "covered_lines": 1, "instrumented_lines": 2}]
+    out = write_coverage(tmp_path, "run-a", rows)
+
+    assert out == tmp_path / ".cerebrum" / "runs" / "run-a" / "coverage.json"
+    assert json.loads(out.read_text(encoding="utf-8")) == rows
