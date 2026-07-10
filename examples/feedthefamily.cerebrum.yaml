@@ -1,0 +1,41 @@
+# Sample Cerebrum adapter for the FeedTheFamily backend module.
+# The backend is JavaScript (Jest 29); its `npm test` already runs with
+# --coverage, emitting lcov at coverage/lcov.info.
+version: 1
+project: FeedTheFamily
+
+runtime:
+  isolation: worktree
+  parallelism: 4
+  test_timeout_multiplier: 8
+
+baseline:
+  require_green: true
+
+modules:
+  - name: backend
+    root: backend
+    language: javascript
+    install: npm ci
+    test: npm test                 # jest --coverage --forceExit → emits coverage
+    coverage_format: lcov
+    coverage_path: coverage/lcov.info
+    source:
+      - "routes/**/*.js"
+      - "middleware/**/*.js"
+      - "services/**/*.js"
+    exclude:
+      - "**/__tests__/**"
+      - "**/*.test.js"
+
+targeting:
+  strategy: coverage
+  max_mutants_per_run: 50
+
+mutation:
+  operator: llm
+  model: claude-sonnet-5
+  budget_usd: 10
+  mutants_per_target: 1
+
+# after_run: python scripts/push_run.py   # optional post-run sink, best-effort
