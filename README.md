@@ -68,7 +68,8 @@ run or changes its exit code or reported mutation score.
 
 ## Setup
 
-Install the engine from the repo root: `pip install -e ".[dev]"`.
+Install the engine: `pip install cerebrum-engine`. If you're working in this repo instead,
+install from the repo root with the dev/test toolchain included: `pip install -e ".[dev]"`.
 
 Cerebrum needs `ANTHROPIC_API_KEY` set in the process environment for mutation
 generation and severity scoring — it only ever reads
