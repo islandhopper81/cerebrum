@@ -60,10 +60,11 @@ Cerebrum uses an **LLM as the mutation operator**, which:
 `cerebrum.yaml` accepts an optional top-level `after_run: <command>` — a single shell
 command the engine runs, in the repo root, once a run's `.cerebrum/` artifacts
 (`history.sqlite`, `runs/<run_id>/mutants.jsonl`, `runs/<run_id>/coverage.json`) have been
-written. Use it to push results somewhere (e.g. `python scripts/push_run.py` for Cerebrum
-Cloud) without teaching the engine anything about the destination. It's best-effort: a
-failing `after_run` command logs a warning to stderr but never fails the run or changes its
-exit code or reported mutation score.
+written. Use it to push results somewhere (e.g. `after_run: cerebrum-cloud-push` after `pip
+install cerebrum-cloud-push` — see [`integrations/cerebrum-cloud/`](integrations/cerebrum-cloud/README.md)
+for the Cerebrum Cloud client) without teaching the engine anything about the destination.
+It's best-effort: a failing `after_run` command logs a warning to stderr but never fails the
+run or changes its exit code or reported mutation score.
 
 ## Setup
 

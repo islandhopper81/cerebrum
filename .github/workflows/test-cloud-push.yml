@@ -1,0 +1,29 @@
+name: test cerebrum-cloud-push
+
+on:
+  pull_request:
+    paths:
+      - "integrations/cerebrum-cloud/**"
+      - ".github/workflows/test-cloud-push.yml"
+  push:
+    branches: [develop]
+    paths:
+      - "integrations/cerebrum-cloud/**"
+      - ".github/workflows/test-cloud-push.yml"
+
+defaults:
+  run:
+    working-directory: integrations/cerebrum-cloud
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - run: pytest -q
+      - run: ruff check .
+      - run: mypy src

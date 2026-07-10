@@ -38,4 +38,4 @@ mutation:
   budget_usd: 10
   mutants_per_target: 1
 
-# after_run: python scripts/push_run.py   # optional post-run sink, best-effort
+# after_run: cerebrum-cloud-push   # optional post-run sink, best-effort (pip install cerebrum-cloud-push)
