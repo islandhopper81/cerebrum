@@ -100,6 +100,7 @@ class CerebrumConfig(_Base):
     modules: list[Module] = Field(min_length=1)
     targeting: Targeting = Field(default_factory=Targeting)
     mutation: Mutation
+    after_run: str | None = None
 
     @model_validator(mode="after")
     def _unique_module_names(self) -> CerebrumConfig:

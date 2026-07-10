@@ -34,6 +34,16 @@ def test_valid_config_applies_defaults() -> None:
     assert module.exclude == []
 
 
+def test_after_run_defaults_to_none() -> None:
+    config = _build()
+    assert config.after_run is None
+
+
+def test_after_run_accepts_command_string() -> None:
+    config = _build(after_run="python scripts/push_run.py")
+    assert config.after_run == "python scripts/push_run.py"
+
+
 def test_unknown_top_level_key_rejected() -> None:
     with pytest.raises(ValidationError, match="frobnicate"):
         _build(frobnicate=True)

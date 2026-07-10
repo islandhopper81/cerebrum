@@ -55,6 +55,16 @@ Cerebrum uses an **LLM as the mutation operator**, which:
   never invents its own strategy names — `--diff` only supplies the range a
   committed config can't.
 
+### Post-run hook
+
+`cerebrum.yaml` accepts an optional top-level `after_run: <command>` — a single shell
+command the engine runs, in the repo root, once a run's `.cerebrum/` artifacts
+(`history.sqlite`, `runs/<run_id>/mutants.jsonl`, `runs/<run_id>/coverage.json`) have been
+written. Use it to push results somewhere (e.g. `python scripts/push_run.py` for Cerebrum
+Cloud) without teaching the engine anything about the destination. It's best-effort: a
+failing `after_run` command logs a warning to stderr but never fails the run or changes its
+exit code or reported mutation score.
+
 ## Setup
 
 Install the engine from the repo root: `pip install -e ".[dev]"`.

@@ -15,6 +15,7 @@ from cerebrum.baseline.models import BaselineResult
 from cerebrum.baseline.runner import BaselineError, run_baseline
 from cerebrum.config.loader import DEFAULT_CONFIG_NAME, ConfigError, load_config
 from cerebrum.config.model import CerebrumConfig, Module
+from cerebrum.exec.command import run_command
 from cerebrum.exec.git import GitError, current_commit
 from cerebrum.execute.lifecycle import NoMutantProduced, run_mutant
 from cerebrum.execute.runner import run_targets
@@ -247,6 +248,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
             baseline.covered_lines, baseline.instrumented_lines, records, repo_root
         ),
     )
+
+    if config.after_run:
+        after_result = run_command(config.after_run, cwd=repo_root)
+        if after_result.exit_code != 0:
+            print(
+                f"after_run: '{config.after_run}' exited {after_result.exit_code} "
+                f"(non-fatal): {after_result.stderr.strip()[:500]}",
+                file=sys.stderr,
+            )
 
     if score is None:
         print("score: n/a (no valid mutants)")

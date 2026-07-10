@@ -37,3 +37,5 @@ mutation:
   model: claude-sonnet-5
   budget_usd: 10
   mutants_per_target: 1
+
+# after_run: python scripts/push_run.py   # optional post-run sink, best-effort
