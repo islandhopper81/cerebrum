@@ -257,3 +257,79 @@ def test_run_end_to_end_records_history_and_prints_score_delta(
     assert code2 == 0
     out2 = capsys.readouterr().out
     assert "vs last run" in out2
+
+
+def _write_after_run_project(tmp_path: Path, after_run: str | None) -> Path:
+    (tmp_path / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    cov = tmp_path / "coverage" / "lcov.info"
+    cov.parent.mkdir(parents=True)
+    cov.write_text("SF:app.py\nDA:1,5\nend_of_record\n", encoding="utf-8")
+    init_git_repo(tmp_path, {})
+
+    config: dict[str, Any] = {
+        "version": 1,
+        "project": "Demo",
+        "modules": [
+            {
+                "name": "backend",
+                "root": ".",
+                "language": "python",
+                "install": "echo installing",
+                "test": "echo testing",
+                "coverage_format": "lcov",
+                "coverage_path": "coverage/lcov.info",
+                "source": ["*.py"],
+            }
+        ],
+        "mutation": {"model": "claude-sonnet-5", "budget_usd": 10},
+    }
+    if after_run is not None:
+        config["after_run"] = after_run
+    path = tmp_path / "cerebrum.yaml"
+    path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    return path
+
+
+def test_run_after_run_executes_in_repo_root(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    diff = make_patch("app.py", "VALUE = 1\n", "VALUE = 2\n")
+    monkeypatch.setattr("cerebrum.cli.LLMOperator", _FakeOperatorFactory(diff))
+    path = _write_after_run_project(
+        tmp_path, "python -c \"open('marker.txt', 'w').close()\""
+    )
+
+    code = main(["run", "-c", str(path), "--module", "backend"])
+
+    assert code == 0
+    assert (tmp_path / "marker.txt").exists()
+
+
+def test_run_after_run_failure_is_non_fatal(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    diff = make_patch("app.py", "VALUE = 1\n", "VALUE = 2\n")
+    monkeypatch.setattr("cerebrum.cli.LLMOperator", _FakeOperatorFactory(diff))
+    path = _write_after_run_project(tmp_path, "python -c \"import sys; sys.exit(1)\"")
+
+    code = main(["run", "-c", str(path), "--module", "backend"])
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "after_run" in captured.err
+    assert "exited 1" in captured.err
+    assert "score:" in captured.out
+
+
+def test_run_without_after_run_has_no_after_run_output(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    diff = make_patch("app.py", "VALUE = 1\n", "VALUE = 2\n")
+    monkeypatch.setattr("cerebrum.cli.LLMOperator", _FakeOperatorFactory(diff))
+    path = _write_after_run_project(tmp_path, None)
+
+    code = main(["run", "-c", str(path), "--module", "backend"])
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "after_run" not in captured.err
