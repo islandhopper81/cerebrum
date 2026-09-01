@@ -77,6 +77,30 @@ def _survived_record(line: int) -> MutantRecord:
     )
 
 
+_MISPOSITIONED_DIFF = (
+    "--- a/routes/meals.js\n"
+    "+++ b/routes/meals.js\n"
+    "@@ -50,2 +50,2 @@\n"  # claims line 50; context actually starts at line 1
+    " // x\n"
+    "-// y\n"
+    "+// Y\n"
+)
+
+
+def _build_error_record(line: int) -> MutantRecord:
+    return MutantRecord(
+        file="routes/meals.js",
+        line=line,
+        diff=_MISPOSITIONED_DIFF,
+        mutation_type="logic",
+        status="BUILD_ERROR",
+        covering_tests="",
+        rationale="patch rejected",
+        duration_seconds=0.0,
+        severity="",
+    )
+
+
 def _seed_run(
     repo_root: Path, run_id: str, started_at: str, records: list[MutantRecord]
 ) -> None:
@@ -187,6 +211,36 @@ def test_report_survivors_reports_when_suggestion_fails(
     out = capsys.readouterr().out
     assert code == 0
     assert "could not generate" in out
+
+
+def test_report_hunk_positions_lists_mismatches(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = _write_project(tmp_path)
+    (tmp_path / "routes").mkdir()
+    (tmp_path / "routes" / "meals.js").write_text("// x\n// y\n", encoding="utf-8")
+    _seed_run(tmp_path, "run-1", "2026-01-01T00:00:00+00:00", [_build_error_record(1)])
+
+    code = main(["report", "-c", str(path), "--hunk-positions"])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "routes/meals.js" in out
+    assert "claims line 50" in out
+    assert "actually at line 1" in out
+
+
+def test_report_hunk_positions_reports_none_on_clean_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = _write_project(tmp_path)
+    _seed_run(tmp_path, "run-1", "2026-01-01T00:00:00+00:00", [_killed_record(1)])
+
+    code = main(["report", "-c", str(path), "--hunk-positions"])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "No hunk position mismatches in this run." in out
 
 
 class _FakeOperatorFactory:
