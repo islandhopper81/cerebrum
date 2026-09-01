@@ -33,6 +33,20 @@ def test_apply_check_false_for_conflicting_patch(tmp_path: Path) -> None:
     assert git.apply_check(tmp_path, diff) is False
 
 
+def test_apply_check_true_for_mismatched_hunk_header(tmp_path: Path) -> None:
+    init_git_repo(tmp_path, {"a.txt": "one\ntwo\nthree\nfour\n"})
+    diff = (
+        "--- a/a.txt\n"
+        "+++ b/a.txt\n"
+        "@@ -1,7 +1,7 @@\n"  # claims 7/7 but body below has 4 old-side / 4 new-side lines
+        " one\n"
+        "-two\n"
+        "+TWO\n"
+        " three\n"
+    )
+    assert git.apply_check(tmp_path, diff) is True
+
+
 def test_apply_check_true_for_non_ascii_patch(tmp_path: Path) -> None:
     old_text = 'const s = "café — “fancy”";\n'
     new_text = 'const s = "café — “CHANGED”";\n'
@@ -53,6 +67,21 @@ def test_apply_mutates_file_with_non_ascii_content(tmp_path: Path) -> None:
     init_git_repo(tmp_path, {"a.txt": old_text})
     git.apply(tmp_path, make_patch("a.txt", old_text, new_text))
     assert (tmp_path / "a.txt").read_text(encoding="utf-8") == new_text
+
+
+def test_apply_mutates_the_file_with_mismatched_hunk_header(tmp_path: Path) -> None:
+    init_git_repo(tmp_path, {"a.txt": "one\ntwo\nthree\nfour\n"})
+    diff = (
+        "--- a/a.txt\n"
+        "+++ b/a.txt\n"
+        "@@ -1,7 +1,7 @@\n"  # claims 7/7 but body below has 4 old-side / 4 new-side lines
+        " one\n"
+        "-two\n"
+        "+TWO\n"
+        " three\n"
+    )
+    git.apply(tmp_path, diff)
+    assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "one\nTWO\nthree\nfour\n"
 
 
 def test_apply_raises_on_conflict(tmp_path: Path) -> None:

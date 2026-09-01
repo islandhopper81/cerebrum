@@ -68,7 +68,8 @@ run or changes its exit code or reported mutation score.
 
 ## Setup
 
-Install the engine from the repo root: `pip install -e ".[dev]"`.
+Install the engine: `pip install cerebrum-engine`. If you're working in this repo instead,
+install from the repo root with the dev/test toolchain included: `pip install -e ".[dev]"`.
 
 Cerebrum needs `ANTHROPIC_API_KEY` set in the process environment for mutation
 generation and severity scoring — it only ever reads
@@ -140,6 +141,10 @@ whether the *impact* of what's surviving is trending up or down over time, not
 just the count. `cerebrum report --trend` prints the last N runs; `cerebrum
 report --survivors` prints the current run's survivors (file:line, diff,
 severity, how many consecutive runs it's persisted) with an LLM-suggested test
-for each. `cerebrum mutate` (a one-off manual mutation) is not part of this —
+for each. `cerebrum report --hunk-positions` prints the current run's
+`BUILD_ERROR` mutants whose diff hunk header claims the wrong starting line for
+its own context — a distinct failure mode from a hunk header's line *counts*
+being wrong (which `git apply --recount` already corrects). `cerebrum mutate`
+(a one-off manual mutation) is not part of this —
 it still writes to the legacy flat `.cerebrum/mutants.jsonl` with no run or
 history entry. Target repos should add `.cerebrum/` to their own `.gitignore`.

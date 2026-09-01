@@ -36,6 +36,7 @@ from cerebrum.report import (
     average_survivor_severity,
     build_survivor_report,
     compute_score,
+    find_position_mismatches,
     record_run,
     recurring_survivors,
     trend,
@@ -322,7 +323,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
         run_summary = latest[0]
     run_id = run_summary.run_id
 
-    if not args.trend and not args.survivors:
+    if not args.trend and not args.survivors and not args.hunk_positions:
         score_str = (
             f"{run_summary.mutation_score:.2f}" if run_summary.mutation_score is not None else "n/a"
         )
@@ -359,6 +360,23 @@ def _cmd_report(args: argparse.Namespace) -> int:
                 print("    suggested_test: could not generate")
             else:
                 print(f"    suggested_test:\n{textwrap.indent(suggested, '      ')}")
+
+    if args.hunk_positions:
+        records = load_records(repo_root, run_id)
+        mismatches = find_position_mismatches(records, repo_root)
+        if not mismatches:
+            print("No hunk position mismatches in this run.")
+            return 0
+        print(f"Hunk position mismatches: {module.name} (run {run_id})")
+        for mismatch in mismatches:
+            if mismatch.actual_line is None:
+                detail = f"claims line {mismatch.claimed_line}, context not found in file"
+            else:
+                detail = (
+                    f"hunk claims line {mismatch.claimed_line}, "
+                    f"context actually at line {mismatch.actual_line}"
+                )
+            print(f"  {mismatch.file}: {detail}")
 
     return 0
 
@@ -493,6 +511,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--survivors",
         action="store_true",
         help="print the survivor report, generating a suggested test for each",
+    )
+    report.add_argument(
+        "--hunk-positions",
+        action="store_true",
+        help="print BUILD_ERROR mutants whose hunk header claims the wrong line",
     )
     report.add_argument(
         "--trend",

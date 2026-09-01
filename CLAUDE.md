@@ -48,7 +48,8 @@ Example: issue #1 (`adapter` label) → `feat/1-config-adapter`.
 - **PyYAML** (`safe_load`) — parse `cerebrum.yaml`
 - **pytest** — tests
 - **ruff** (lint/format) + **mypy** (type-check)
-- Packaging: `pyproject.toml`, console entry point `cerebrum`
+- Packaging: `pyproject.toml`, console entry point `cerebrum`, published to PyPI as
+  `cerebrum-engine`
 
 *(The engine is the code in this repo. It is deliberately language-agnostic about
 the codebases it mutates — those are described per-repo in a `cerebrum.yaml`
@@ -58,19 +59,38 @@ Every target repo running Cerebrum should add `.cerebrum/` to its own
 `.gitignore` — that directory holds engine output (mutant records, run history,
 `history.sqlite`), not source, and nothing currently does this for you.
 
-## Repo structure (emerging — see issue #1)
+## Repo structure
+
+This repo holds two independently-versioned, independently-published Python packages: the
+engine itself (root `pyproject.toml`) and one optional integration client
+(`integrations/cerebrum-cloud/`, its own `pyproject.toml`). They do not depend on each other
+— the integration never imports `cerebrum`, and the engine has no knowledge of any specific
+`after_run` sink. See "Packaging & releases" below for how each ships.
 
 ```
-src/cerebrum/          # the engine (Python)
-  config/              # cerebrum.yaml model + loader (issue #1)
-  exec/                # shared shell command runner + git wrappers (issues #2, #3, #5, #4, #6)
-  baseline/            # baseline stage: install/test/require-green/coverage (issue #2)
-  generate/            # GENERATE stage: operator seam + LLM operator + severity (issues #3, #6)
-  execute/             # EXECUTE stage: lifecycle, targeting, worktree pool + parallel runner (issues #3, #5, #4, #6)
-  report/              # REPORT stage: score, survivor report, suggested tests, trend (issue #6)
+pyproject.toml         # root package: dist name cerebrum-engine, console script `cerebrum`
+src/cerebrum/           # the engine (Python)
+  config/              # cerebrum.yaml model + loader
+  exec/                # shared shell command runner + git wrappers
+  baseline/            # baseline stage: install/test/require-green/coverage
+  generate/            # GENERATE stage: operator seam + LLM operator + severity
+  execute/             # EXECUTE stage: lifecycle, targeting, worktree pool + parallel runner
+  report/              # REPORT stage: score, survivor report, suggested tests, trend
   cli.py               # `cerebrum` entry point (`validate`, `baseline`, `mutate`, `run`, `report`)
 examples/              # sample cerebrum.yaml files (e.g. FeedTheFamily)
-tests/                 # pytest suite, mirrors src/cerebrum/
+tests/                 # pytest suite for the engine, mirrors src/cerebrum/
+
+integrations/cerebrum-cloud/    # standalone package: dist name cerebrum-cloud-push
+  pyproject.toml               # separate version, deps ([] — stdlib only), own ruff/mypy config
+  src/cerebrum_cloud_push/      # push.py: reads local .cerebrum/ artifacts, POSTs to Cerebrum
+                                # Cloud's ingest-run Edge Function; console script `cerebrum-cloud-push`
+  tests/                       # pytest suite for this subpackage only
+
+.github/workflows/
+  publish.yml               # cerebrum-engine: on GitHub Release published -> build + PyPI publish
+  test-cloud-push.yml       # cerebrum-cloud-push: pytest/ruff/mypy on PRs/pushes touching
+                             # integrations/cerebrum-cloud/**
+  publish-cloud-push.yml    # cerebrum-cloud-push: on cloud-push-v* tag -> test job -> build + PyPI publish
 ```
 
 ## Commands
@@ -84,7 +104,45 @@ Run from the repo root, inside the project's virtualenv:
 - Format: `ruff format .`
 - Type-check: `mypy src`
 
-*(These reflect the intended toolchain; `pyproject.toml` lands with issue #1.)*
+The `integrations/cerebrum-cloud/` subpackage has its own copy of these (own `pyproject.toml`,
+own `[tool.ruff]`/`[tool.mypy]` — they don't cascade from the root). Run them from inside
+that directory against a separate install (`pip install -e ".[dev]"` there); root `testpaths`/
+`mypy_path` scoping keeps the two test suites and type-checks from double-running each other.
+There is currently no CI gate on the root engine itself (`src/cerebrum/`) — `pytest`,
+`ruff check .`, `mypy src` at the repo root must be run locally before opening a PR. CI does
+exist for the `integrations/cerebrum-cloud/` subpackage (`test-cloud-push.yml`).
+
+## Packaging & releases
+
+Both packages publish to PyPI via **Trusted Publishing** (GitHub OIDC, `pypa/gh-action-pypi-publish`)
+— no stored API token. Both use a GitHub Actions environment named `pypi` as the trust
+boundary; that environment must exist in this repo's Settings before either workflow can
+publish, and each PyPI project has a pending/registered trusted publisher pointing at this
+repo + the specific workflow filename below.
+
+### `cerebrum-engine` (the engine, root `pyproject.toml`)
+
+1. Bump `version` in root `pyproject.toml`.
+2. Merge `develop` → `main` via PR (releases are cut from `main`, never `develop`).
+3. On `main`, create a GitHub Release (tag `vX.Y.Z`) and publish it.
+4. `.github/workflows/publish.yml` triggers on `release: published`, builds the sdist/wheel,
+   and publishes to PyPI.
+5. Verify: `pip install cerebrum-engine` in a clean venv, `cerebrum --help`.
+
+### `cerebrum-cloud-push` (`integrations/cerebrum-cloud/`)
+
+Independently versioned from the engine — a Cerebrum Cloud ingest-API change shouldn't force
+an engine release, and vice versa.
+
+1. Bump `version` in `integrations/cerebrum-cloud/pyproject.toml`.
+2. Merge `develop` → `main` via PR.
+3. On `main`, push a tag `cloud-push-vX.Y.Z` (not a GitHub Release — this package triggers on
+   the tag push itself). The tag's version suffix must match the `pyproject.toml` version
+   exactly; `publish-cloud-push.yml` fails fast if they don't match.
+4. `.github/workflows/publish-cloud-push.yml` triggers on `push: tags: cloud-push-v*`, runs
+   its own `test` job (pytest/ruff/mypy) first, and only builds + publishes to PyPI if that
+   passes (`publish` job has `needs: test`) — a broken tag cannot reach PyPI.
+5. Verify: `pip install cerebrum-cloud-push` in a clean venv, `cerebrum-cloud-push --help`.
 
 ## Worktree setup
 
@@ -95,8 +153,15 @@ package install in the worktree. Because the package is an editable install,
 tools against worktree code, set `PYTHONPATH` to the worktree root. `pytest` is
 the exception — it prepends the worktree root itself.
 
+This sharing arrangement is specific to the root engine package. For a ticket that touches
+`integrations/cerebrum-cloud/`, the shared root `.venv` has no relationship to that
+subpackage (it isn't installed into it, editable or otherwise) — install it separately,
+e.g. into its own scratch venv (`pip install -e integrations/cerebrum-cloud[dev]`), before
+running its tests/lint/type-check.
+
 ## Definition of done (per ticket)
 
 - Acceptance criteria in the issue are met and covered by tests.
-- `pytest`, `ruff check`, and `mypy src` pass.
+- `pytest`, `ruff check`, and `mypy src` pass — from the repo root for engine changes, or
+  from `integrations/cerebrum-cloud/` for changes scoped to that subpackage.
 - PR opened against `develop` with `Closes #<N>`.

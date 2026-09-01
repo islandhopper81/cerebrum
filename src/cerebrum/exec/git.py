@@ -63,13 +63,13 @@ def worktree_remove(repo_root: Path, worktree_path: Path) -> None:
 
 def apply_check(worktree_root: Path, diff: str) -> bool:
     """Return whether ``diff`` applies cleanly in ``worktree_root`` (no changes made)."""
-    result = _run_git(["apply", "--check"], cwd=worktree_root, input_text=diff)
+    result = _run_git(["apply", "--check", "--recount"], cwd=worktree_root, input_text=diff)
     return result.returncode == 0
 
 
 def apply(worktree_root: Path, diff: str) -> None:
     """Apply ``diff`` in ``worktree_root``, raising :class:`GitError` on failure."""
-    result = _run_git(["apply"], cwd=worktree_root, input_text=diff)
+    result = _run_git(["apply", "--recount"], cwd=worktree_root, input_text=diff)
     if result.returncode != 0:
         raise GitError(f"git apply failed: {result.stderr.strip()}")
 
