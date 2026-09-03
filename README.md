@@ -131,9 +131,10 @@ Each `cerebrum run` is a "run" in the trend sense: its mutant records land under
 counts, the git commit at the time, the average severity of that run's
 survivors, and the module's code-coverage percentage) is appended to
 `.cerebrum/history.sqlite`. A per-file coverage rollup for the run — covered vs.
-instrumented line counts, coverage fraction, and the count and worst severity of
-survivors per file — is also written to `.cerebrum/runs/<run_id>/coverage.json`,
-so coverage can be trended over time and low-coverage files ranked by risk. Every
+instrumented line counts, coverage fraction, the count of mutants actually applied
+and tested on that file, and the count and worst severity of survivors per file —
+is also written to `.cerebrum/runs/<run_id>/coverage.json`, so coverage can be
+trended over time and low-coverage files ranked by risk. Every
 mutant now carries a
 Claude-estimated `severity` (`low`/`medium`/`high`/`critical`) alongside its
 `mutation_type`, so a declining score isn't the only signal — you can also see
