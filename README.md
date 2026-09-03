@@ -48,7 +48,11 @@ Cerebrum uses an **LLM as the mutation operator**, which:
 - **Pure-LLM operator** behind a validity gate: a mutant only counts if its
   patch applies, changes behavior, and builds/lints.
 - **Coverage-guided targeting** — never mutate uncovered lines (they survive
-  trivially and add noise).
+  trivially and add noise). When a run's mutant cap can't cover every eligible
+  line, selection is distributed fairly across files (no single file can
+  exhaust the cap while others get none) and randomized per run, so trending
+  scores over many runs converge on a representative picture of the whole
+  module instead of a fixed, alphabetically-biased subset.
 - **One targeting vocabulary**: `cerebrum run` sweeps a module using the
   strategy named in config (`coverage` by default); `cerebrum run --diff
   <base>..<head>` mutates only lines changed in that range (PR gate). The CLI
