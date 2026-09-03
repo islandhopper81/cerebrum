@@ -15,6 +15,7 @@ import json
 import os
 from typing import Any, cast, get_args
 
+from cerebrum.generate._json import extract_json
 from cerebrum.generate.operator import MutantProposal, MutationTarget, MutationType, Severity
 
 _MUTATION_TYPES = frozenset(get_args(MutationType))
@@ -118,7 +119,7 @@ class LLMOperator:
         )
 
     def _parse(self, text: str) -> MutantProposal | None:
-        payload = _extract_json(text)
+        payload = extract_json(text)
         if payload is None:
             return None
         try:
@@ -146,13 +147,3 @@ class LLMOperator:
             equivalent=bool(data.get("equivalent", False)),
             severity=severity,
         )
-
-
-def _extract_json(text: str) -> str | None:
-    """Pull the first ``{...}`` object out of a model response, tolerating code
-    fences and surrounding prose."""
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end < start:
-        return None
-    return text[start : end + 1]

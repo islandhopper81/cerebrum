@@ -63,15 +63,19 @@ def test_run_changed_strategy_without_diff_fails_clearly(
     assert "--diff" in capsys.readouterr().err
 
 
-def test_run_llm_risk_strategy_raises_targeting_error(
+def test_run_llm_risk_strategy_with_no_covered_lines_reports_and_exits_zero(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    path = _write_project(tmp_path, strategy="llm-risk")
+    path = _write_project(
+        tmp_path,
+        strategy="llm-risk",
+        lcov="SF:routes/meals.js\nDA:1,0\nDA:2,0\nend_of_record\n",
+    )
 
     code = main(["run", "-c", str(path)])
 
-    assert code == 1
-    assert "llm-risk" in capsys.readouterr().err
+    assert code == 0
+    assert "no targets to mutate" in capsys.readouterr().out
 
 
 def test_run_with_no_covered_lines_reports_and_exits_zero(

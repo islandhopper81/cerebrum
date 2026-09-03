@@ -49,6 +49,26 @@ class FakeOperator:
         return self.proposal
 
 
+@dataclass
+class FakeRiskScorer:
+    """Deterministic stand-in for the Claude risk scorer. ``scores_by_file`` maps
+    each file to the score dict (or ``None``, simulating a failure) it should
+    return; a file not present in the mapping returns ``None``. Records the
+    calls it received so targeting tests can assert scoring was (or wasn't)
+    skipped."""
+
+    scores_by_file: dict[Path, dict[int, float] | None]
+    calls: list[tuple[Path, list[int]]] | None = None
+
+    def score(
+        self, file: Path, source_text: str, candidate_lines: list[int]
+    ) -> dict[int, float] | None:
+        if self.calls is None:
+            self.calls = []
+        self.calls.append((file, candidate_lines))
+        return self.scores_by_file.get(file)
+
+
 def make_patch(rel_path: str, old_text: str, new_text: str) -> str:
     """Build a git-appliable unified diff (``a/`` ``b/`` prefixes) between two
     versions of ``rel_path``. Both texts should end with a newline."""
