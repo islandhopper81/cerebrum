@@ -57,3 +57,12 @@ class MutationOperator(Protocol):
     """Produces at most one mutant for a target, or ``None`` if it cannot."""
 
     def propose(self, target: MutationTarget) -> MutantProposal | None: ...
+
+
+class RiskScorer(Protocol):
+    """Scores candidate lines' mutation-testing risk, or returns ``None`` if it
+    cannot (network/parse failure) — callers fall back to uniform weighting."""
+
+    def score(
+        self, file: Path, source_text: str, candidate_lines: list[int]
+    ) -> dict[int, float] | None: ...

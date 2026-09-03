@@ -8,8 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from cerebrum.execute.targeting import TargetingContext, TargetingError, select_targets
-from tests.support import init_git_repo, make_baseline, make_module
+from cerebrum.execute.targeting import (
+    TargetingContext,
+    TargetingError,
+    _allocate_quotas,
+    _weighted_sample_without_replacement,
+    select_targets,
+)
+from tests.support import FakeRiskScorer, init_git_repo, make_baseline, make_module
 
 
 def _write(repo: Path, rel: str, text: str) -> Path:
@@ -251,3 +257,132 @@ def test_unknown_strategy_raises(tmp_path: Path) -> None:
 
     with pytest.raises(TargetingError):
         select_targets("nonsense", ctx)
+
+
+def test_allocate_quotas_matches_prior_distribute_fairly_behavior(tmp_path: Path) -> None:
+    files_to_lines = {
+        Path("a.py"): {1, 2, 3, 4},
+        Path("b.py"): {1, 2},
+        Path("c.py"): {1, 2, 3},
+    }
+
+    quotas = _allocate_quotas(files_to_lines, cap=3, rng=random.Random(1))
+
+    assert sorted(quotas) == [Path("a.py"), Path("b.py"), Path("c.py")]
+    assert all(q >= 1 for q in quotas.values())  # every file present, none starved
+    assert sum(quotas.values()) == 3
+
+
+def test_allocate_quotas_selects_random_subset_when_files_exceed_cap() -> None:
+    files_to_lines = {Path(f"{c}.py"): {1} for c in "abcde"}
+
+    quotas = _allocate_quotas(files_to_lines, cap=2, rng=random.Random(1234))
+
+    assert sum(1 for q in quotas.values() if q > 0) == 2
+
+
+def test_weighted_sample_favors_high_weight_line_across_seeds() -> None:
+    lines = [1, 2, 3, 4, 5]
+    weights = {1: 100.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 1.0}
+
+    wins = 0
+    for seed in range(20):
+        chosen = _weighted_sample_without_replacement(lines, weights, k=1, rng=random.Random(seed))
+        if chosen == {1}:
+            wins += 1
+
+    assert wins >= 16
+
+
+def test_weighted_sample_never_fully_excludes_a_zero_weight_line() -> None:
+    lines = [1, 2, 3, 4, 5]
+    weights = {1: 0.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 1.0}
+
+    picked_low_weight_line = False
+    for seed in range(50):
+        chosen = _weighted_sample_without_replacement(lines, weights, k=1, rng=random.Random(seed))
+        if chosen == {1}:
+            picked_low_weight_line = True
+            break
+
+    assert picked_low_weight_line
+
+
+def test_llm_risk_requires_a_risk_scorer(tmp_path: Path) -> None:
+    a = _write(tmp_path, "a.py", "1\n2\n")
+    baseline = make_baseline({a: {1, 2}})
+    ctx = TargetingContext(
+        baseline=baseline, module=make_module(), repo_root=tmp_path, cap=50, risk_scorer=None
+    )
+
+    with pytest.raises(TargetingError):
+        select_targets("llm-risk", ctx)
+
+
+def test_llm_risk_skips_scoring_when_quota_covers_every_candidate(tmp_path: Path) -> None:
+    a = _write(tmp_path, "a.py", "1\n2\n")
+    baseline = make_baseline({a: {1, 2}})
+    scorer = FakeRiskScorer(scores_by_file={})
+    ctx = TargetingContext(
+        baseline=baseline,
+        module=make_module(),
+        repo_root=tmp_path,
+        cap=50,
+        rng=random.Random(1),
+        risk_scorer=scorer,
+    )
+
+    targets = select_targets("llm-risk", ctx)
+
+    assert len(targets) == 2  # quota (2) == candidate count (2): both picked, no call needed
+    assert scorer.calls is None
+
+
+def test_llm_risk_falls_back_to_uniform_when_scorer_returns_none_for_one_file(
+    tmp_path: Path,
+) -> None:
+    a = _write(tmp_path, "a.py", "1\n2\n3\n4\n5\n")
+    b = _write(tmp_path, "b.py", "1\n2\n3\n4\n5\n")
+    baseline = make_baseline({a: {1, 2, 3, 4, 5}, b: {1, 2, 3, 4, 5}})
+    scorer = FakeRiskScorer(
+        scores_by_file={
+            a: None,
+            b: {1: 100.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 1.0},
+        }
+    )
+    ctx = TargetingContext(
+        baseline=baseline,
+        module=make_module(),
+        repo_root=tmp_path,
+        cap=2,  # quota of 1 line per file
+        rng=random.Random(1),
+        risk_scorer=scorer,
+    )
+
+    targets = select_targets("llm-risk", ctx)
+
+    assert {t.file for t in targets} == {Path("a.py"), Path("b.py")}
+    b_target = next(t for t in targets if t.file == Path("b.py"))
+    assert b_target.line == 1  # heavily-weighted line wins for the scored file
+
+
+def test_llm_risk_preserves_file_level_fairness(tmp_path: Path) -> None:
+    a = _write(tmp_path, "a.py", "1\n2\n3\n4\n")
+    b = _write(tmp_path, "b.py", "1\n2\n")
+    c = _write(tmp_path, "c.py", "1\n2\n3\n")
+    baseline = make_baseline({a: {1, 2, 3, 4}, b: {1, 2}, c: {1, 2, 3}})
+    scorer = FakeRiskScorer(scores_by_file={a: {1: 1.0, 2: 1.0, 3: 1.0, 4: 1.0}})
+    ctx = TargetingContext(
+        baseline=baseline,
+        module=make_module(),
+        repo_root=tmp_path,
+        cap=3,
+        rng=random.Random(1),
+        risk_scorer=scorer,
+    )
+
+    targets = select_targets("llm-risk", ctx)
+
+    files = [t.file for t in targets]
+    assert sorted(files) == [Path("a.py"), Path("b.py"), Path("c.py")]
+    assert len(targets) == 3
