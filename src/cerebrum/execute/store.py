@@ -24,6 +24,11 @@ COVERAGE_FILENAME = "coverage.json"
 
 _SEVERITY_RANK = {"low": 1, "medium": 2, "high": 3, "critical": 4}
 
+# Statuses meaning a mutant was actually applied to a worktree and tested, as
+# opposed to BUILD_ERROR (rejected by the validity gate before application) or
+# NO_COVERAGE (short-circuited before a worktree was even provisioned).
+ATTEMPTED_STATUSES = {"KILLED", "SURVIVED", "TIMEOUT"}
+
 
 def append_record(repo_root: Path, record: MutantRecord, run_id: str | None = None) -> Path:
     base = repo_root / RECORDS_DIRNAME
@@ -51,16 +56,21 @@ def build_coverage_rows(
     records: list[MutantRecord],
     repo_root: Path,
 ) -> list[dict[str, Any]]:
-    """Roll up per-file coverage joined with surviving-mutant counts.
+    """Roll up per-file coverage joined with attempted- and surviving-mutant counts.
 
     One row per instrumented file: covered/instrumented line counts, coverage
-    fraction, and the count and worst severity of survivors on that file. File
-    paths are repo-relative POSIX so they match ``MutantRecord.file`` and are
-    portable across machines.
+    fraction, the count of mutants actually applied and tested there
+    (``ATTEMPTED_STATUSES``), and the count and worst severity of survivors on
+    that file. File paths are repo-relative POSIX so they match
+    ``MutantRecord.file`` and are portable across machines.
     """
+    mutant_counts: dict[str, int] = {}
     survivor_counts: dict[str, int] = {}
     survivor_worst: dict[str, int] = {}
     for record in records:
+        if record.status in ATTEMPTED_STATUSES:
+            key = record.file.replace("\\", "/")
+            mutant_counts[key] = mutant_counts.get(key, 0) + 1
         if record.status != "SURVIVED":
             continue
         key = record.file.replace("\\", "/")
@@ -84,6 +94,7 @@ def build_coverage_rows(
                 "coverage_pct": (
                     covered_count / instrumented_count if instrumented_count else None
                 ),
+                "mutant_count": mutant_counts.get(rel, 0),
                 "survivor_count": survivor_counts.get(rel, 0),
                 "max_severity": rank_to_severity.get(worst_rank) if worst_rank else None,
             }

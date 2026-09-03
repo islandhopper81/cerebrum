@@ -99,9 +99,11 @@ def test_build_coverage_rows_joins_coverage_and_survivors(tmp_path: Path) -> Non
     assert mod["covered_lines"] == 4
     assert mod["instrumented_lines"] == 8
     assert mod["coverage_pct"] == 0.5
+    assert mod["mutant_count"] == 3  # 2 SURVIVED + 1 KILLED
     assert mod["survivor_count"] == 2  # KILLED excluded
     assert mod["max_severity"] == "critical"  # worst of low + critical
     other = rows[1]
+    assert other["mutant_count"] == 1
     assert other["survivor_count"] == 1
     assert other["max_severity"] == "medium"
 
@@ -109,9 +111,29 @@ def test_build_coverage_rows_joins_coverage_and_survivors(tmp_path: Path) -> Non
 def test_build_coverage_rows_no_survivors_has_null_severity(tmp_path: Path) -> None:
     instrumented = {tmp_path / "a.py": {1, 2}}
     rows = build_coverage_rows({tmp_path / "a.py": {1}}, instrumented, [], tmp_path)
+    assert rows[0]["mutant_count"] == 0
     assert rows[0]["survivor_count"] == 0
     assert rows[0]["max_severity"] is None
     assert rows[0]["coverage_pct"] == 0.5
+
+
+def test_build_coverage_rows_excludes_build_error_and_no_coverage_from_mutant_count(
+    tmp_path: Path,
+) -> None:
+    instrumented = {tmp_path / "a.py": {1, 2}}
+    records = [
+        _record(status="BUILD_ERROR", file="a.py"),
+        _record(status="NO_COVERAGE", file="a.py"),
+    ]
+    rows = build_coverage_rows({tmp_path / "a.py": {1}}, instrumented, records, tmp_path)
+    assert rows[0]["mutant_count"] == 0  # neither status counts as "attempted"
+
+
+def test_build_coverage_rows_counts_timeout_as_attempted(tmp_path: Path) -> None:
+    instrumented = {tmp_path / "a.py": {1, 2}}
+    records = [_record(status="TIMEOUT", file="a.py")]
+    rows = build_coverage_rows({tmp_path / "a.py": {1}}, instrumented, records, tmp_path)
+    assert rows[0]["mutant_count"] == 1
 
 
 def test_write_coverage_writes_json_under_run_dir(tmp_path: Path) -> None:
