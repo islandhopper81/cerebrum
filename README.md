@@ -113,8 +113,12 @@ lines via the config's strategy or a changed-lines diff range, then mutate
 them in parallel across a pool of pre-installed, reused git worktrees
 (`runtime.parallelism`) instead of one at a time. Reporting (`cerebrum report`)
 is implemented: mutation score, a survivor report with LLM-suggested tests, and
-a severity-weighted trend across runs. Still to come: `llm-risk` and `all`
-strategies.
+a severity-weighted trend across runs. The `llm-risk` targeting strategy is
+implemented: within each file's already-fair share of the budget, it weights
+*which* lines get picked toward ones Claude judges higher-risk (complex
+conditionals, edge cases, financial/security logic), at the cost of up to one
+extra LLM call per scored file per run — a file falls back to uniform
+weighting automatically if its call fails. Still to come: the `all` strategy.
 
 ## Mutant outcomes
 

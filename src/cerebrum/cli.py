@@ -29,6 +29,7 @@ from cerebrum.execute.store import (
 from cerebrum.execute.targeting import TargetingContext, TargetingError, select_targets
 from cerebrum.execute.worktree import WorktreeError
 from cerebrum.generate.llm import LLMOperator, LLMOperatorError
+from cerebrum.generate.risk import LLMRiskScorer
 from cerebrum.report import (
     RunSummary,
     TestSuggester,
@@ -173,12 +174,18 @@ def _cmd_run(args: argparse.Namespace) -> int:
         return 1
 
     strategy = "changed" if args.diff is not None else config.targeting.strategy
+    risk_scorer = (
+        LLMRiskScorer(model=config.mutation.model, budget_usd=config.mutation.budget_usd)
+        if strategy == "llm-risk"
+        else None
+    )
     ctx = TargetingContext(
         baseline=baseline,
         module=module,
         repo_root=repo_root,
         cap=config.targeting.max_mutants_per_run,
         diff_range=args.diff,
+        risk_scorer=risk_scorer,
     )
     try:
         targets = select_targets(strategy, ctx)
